@@ -46,6 +46,7 @@ sub.df.train <- seg.df[train.cases , ]
 sub.df.train
 sub.df.test <- seg.df[-train.cases , ]
 sub.df.test
+#Probar Random Forest
 #Ajustar modelo
 modelo <- randomForest(gender~., data=sub.df.train)
 #Graficar modelo
@@ -60,7 +61,7 @@ predicciones <- predict(modelo, sub.df.test)
 (mc <- with(sub.df.test,table(predicciones, gender)))
 # % correcto
 100 * sum(diag(mc)) / sum(mc)
-#Arbol de decisión: Recursive Partitioning and Regression Trees
+#Pruebo ahora arbol de decisión: Recursive Partitioning and Regression Trees
 arbol_1 <- rpart(formula = gender ~ ., data =sub.df.train)
 arbol_1
 #Plot
