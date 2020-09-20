@@ -8,7 +8,7 @@ ipak <- function(pkg){
 packages <- c("dplyr", "fpc","NbClust","cluster","factoextra","tidyr", "mclust", "poLCA", "e1071", "mlr", "randomForest", "tidyverse", "factoextra","NbClust", "ggplot2", "rpart", "rpart.plot", "caret")
 ipak(packages)
 #Cargar datos
-seg.raw <- read.csv("rintro-chapter5.csv")
+seg.raw <- read.csv("Data.csv")
 seg.df <- seg.raw[ , -7] # remove the known segment assignments
 summary(seg.df) #Me doy cuenta que las respuestas categoricas no están como factores, modifico eso para dejarlos como factores
 #Creamos los datos 
