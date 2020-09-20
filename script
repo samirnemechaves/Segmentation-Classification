@@ -1,0 +1,142 @@
+ipak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg)) 
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+
+packages <- c("dplyr", "fpc","NbClust","cluster","factoextra","tidyr", "mclust", "poLCA", "e1071", "mlr", "randomForest", "tidyverse", "factoextra","NbClust", "ggplot2", "rpart", "rpart.plot", "caret")
+ipak(packages)
+#Cargar datos
+seg.raw <- read.csv("rintro-chapter5.csv")
+seg.df <- seg.raw[ , -7] # remove the known segment assignments
+summary(seg.df) #Me doy cuenta que las respuestas categoricas no están como factores, modifico eso para dejarlos como factores
+#Creamos los datos 
+age<- c(seg.df$age)
+age
+gender<- c(seg.df$gender)
+gender
+income <-c(seg.df$income)
+income
+kids <- c(seg.df$kids)
+kids
+ownHome <- c(seg.df$ownHome)
+ownHome
+subscribe <-c(seg.df$subscribe) 
+subscribe
+#Creamos los factores
+factor_gender <- factor(gender)
+factor_own <- factor(ownHome)
+factor_subs <- factor(subscribe)
+plot(factor_subs)
+#creamos la base de datos con los nuevos factores
+seg.df2 <- data.frame(age = age, gender = factor_gender, income = income, kids = kids, ownHome = factor_own, subscribe = factor_subs)
+seg.df2
+#comprobamos que grafique correctamente
+plot(seg.df2$subscribe)
+#Revisamos que muestre agrupado los factores
+summary(seg.df2)
+#Dejamos de nuevo los datos como deberian estar
+seg.df <- seg.df2
+#Creamos datos de entrenamiento y prueba
+train.prop <- 0.65
+train.cases <- sample(nrow(seg.df), nrow(seg.df)*train.prop)
+train.cases
+sub.df.train <- seg.df[train.cases , ]
+sub.df.train
+sub.df.test <- seg.df[-train.cases , ]
+sub.df.test
+#Ajustar modelo
+modelo <- randomForest(gender~., data=sub.df.train)
+#Graficar modelo
+plot(modelo)
+# Resumen del ajuste del modelo
+modelo
+# Importancia de las variables
+modelo$importance
+#Hacer predicciones
+predicciones <- predict(modelo, sub.df.test)
+# Matriz de confusión
+(mc <- with(sub.df.test,table(predicciones, gender)))
+# % correcto
+100 * sum(diag(mc)) / sum(mc)
+#Arbol de decisión: Recursive Partitioning and Regression Trees
+arbol_1 <- rpart(formula = gender ~ ., data =sub.df.train)
+arbol_1
+#Plot
+rpart.plot(arbol_1)
+#predicción
+prediccion_1 <- predict(arbol_1, newdata = sub.df.train, type = "class")
+#matriz de confusion
+confusionMatrix(prediccion_1, sub.df.train[["gender"]])
+#Generamos un segundo árbol, usando sets de entrenamiento y prueba diferentes.
+set.seed(7439)
+sub.df.train_2 <- sample_frac(seg.df, .7)
+sub.df.train_2 <- setdiff(seg.df, sub.df.train)
+arbol_2 <- rpart(formula = gender ~ ., data = sub.df.train_2)
+prediccion_2 <- predict(arbol_2, newdata = sub.df.train_2, type = "class")
+#plot
+rpart.plot(arbol_2)
+#confusion matrix
+confusionMatrix(prediccion_2, sub.df.train_2[["gender"]])
+#intentar 3 arbol
+set.seed(8476)
+sub.df.train_3 <- sample_frac(seg.df, .7)
+sub.df.train_3 <- setdiff(seg.df, sub.df.train)
+arbol_3 <- rpart(formula = gender ~ ., data = sub.df.train_3)
+prediccion_3 <- predict(arbol_3, newdata = sub.df.train_3, type = "class")
+rpart.plot(arbol_3)
+
+#Por supuesto, podemos crear un grupo de funciones que para generar árboles de manera repetida.
+crear_sets <- function(datos, proporcion = .7) {
+  sets <- list()
+  
+  sets[["entrenamiento"]] <- sample_frac(datos, proporcion)
+  sets[["prueba"]] <- setdiff(datos, sets[["entrenamiento"]])
+  
+  sets
+}
+
+entrenar_arbol <- function(sets, objetivo, predictores = ".", mi_cp = .01) {
+  if(length(predictores > 1)) {
+    predictores <- paste0(predictores, collapse = "+")
+  }
+  mi_formula <- paste0(objetivo, " ~ ", predictores) %>% as.formula()
+  
+  arbol <- list()
+  arbol[["modelo"]] <- 
+    rpart(data = sets[["entrenamiento"]], formula = mi_formula, 
+          control = rpart.control(cp = mi_cp, xval = 35, minsplit = 5))
+  arbol[["prediccion"]] <- predict(arbol[["modelo"]], sets[["prueba"]], type = "class")
+  arbol[["referencia"]] <- sets[["prueba"]][[objetivo]]
+  
+  arbol
+}
+
+
+obtener_diagnostico <- function(arbol, objetivo, mi_cp = 0.01) {
+  diagnostico <- list()
+  diagnostico[["matriz"]] <- confusionMatrix(data = arbol[["prediccion"]], 
+                                             reference = arbol[["referencia"]])
+  
+  cp <- with(arbol[["modelo"]], cptable[which.min(cptable[, "xerror"]), "CP"])
+  cp_original <- mi_cp
+  podar <- if(cp < mi_cp) "SI" else "NO"
+  diagnostico[["mincp"]] <- data.frame("CP mínimo" = cp, "CP original" = cp_original, "Podar" = podar)
+  
+  diagnostico
+} 
+
+crear_arbol <- function(datos, objetivo, predictores = ".", mi_cp = 0.01) {
+  resultado <- list()
+  resultado[["sets"]] <- crear_sets(datos)
+  resultado[["arbol"]] <- entrenar_arbol(resultado[["sets"]], objetivo, predictores, mi_cp)
+  resultado[["diagnostico"]] <- obtener_diagnostico(resultado[["arbol"]], objetivo, mi_cp)
+  
+  resultado
+}
+#Veamos el resultado de lo anterior.
+set.seed(1986)
+unarbol <- crear_arbol(seg.df, "gender", mi_cp = 0.005)
+
+unarbol[["diagnostico"]]
